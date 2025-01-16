@@ -11,7 +11,7 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebaseConfig'; // Importa tu configuración de Firebase
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
-const LoginScreen = ({ navigation, setIsAuthenticated }) => {
+const LoginScreen = ({ navigation, setIsAuthenticated, route }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -22,6 +22,14 @@ const LoginScreen = ({ navigation, setIsAuthenticated }) => {
     } catch (error) {
       console.error(error.message);
       Alert.alert('Error', 'Credenciales inválidas');
+    }
+  };
+
+  const goRegister = () => {
+    if (route.params?.previousScreen === 'Phone') {
+      navigation.goBack(); 
+    } else {
+      navigation.navigate('Phone', { previousScreen: 'Login' });
     }
   };
 
@@ -56,7 +64,7 @@ const LoginScreen = ({ navigation, setIsAuthenticated }) => {
       </View>
 
       {/* Link de contraseña olvidada */}
-      <TouchableOpacity>
+      <TouchableOpacity onPress={() => navigation.navigate('Password')}>
         <Text style={styles.linkText}>¿Olvidaste tu contraseña?</Text>
       </TouchableOpacity>
 
@@ -71,12 +79,12 @@ const LoginScreen = ({ navigation, setIsAuthenticated }) => {
       </View>
 
       {/* Link para registro */}
-      <TouchableOpacity onPress={() => navigation.navigate('Register')} style={styles.registerButton}>
+      <TouchableOpacity onPress={goRegister} style={styles.registerButton}>
         <Text style={styles.registerButtonText}>Regístrate gratis</Text>
       </TouchableOpacity>
 
       {/* Botón de regreso */}
-      <TouchableOpacity onPress={() => navigation.goBack()}>
+      <TouchableOpacity onPress={() => navigation.navigate('Welcome')}>
         <Text style={styles.goBackText}>Regresar</Text>
       </TouchableOpacity>
     </View>
@@ -165,8 +173,8 @@ const styles = StyleSheet.create({
     marginVertical: 20,
   },
   separatorText: {
-    color: '#00000',
     fontSize: 16,
+    color: '#666',
     marginBottom: -20, // Espacio entre el texto y la línea
   },
   separatorLine: {
