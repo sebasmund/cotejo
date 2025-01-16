@@ -5,7 +5,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   Animated,
-  Easing, Image
+  Easing,
+  Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 
@@ -15,20 +16,21 @@ const WelcomeScreen = () => {
   const darkAnim = useRef(new Animated.Value(0)).current; // Fondo oscuro
   const navigation = useNavigation();
 
+  // Lista de imágenes como require
   const images = [
-    require('../assets/1.jpg'),
-    require('../assets/2.jpg'),
-    require('../assets/3.jpg'),
+    require('../assets/uno.jpg'),
+    require('../assets/dos.jpg'),
+    require('../assets/tres.jpg'), 
   ];
 
   useEffect(() => {
     const interval = setInterval(() => {
       const next = (currentSlide + 1) % images.length;
 
-      // Iniciar transición 
+      // Iniciar transición
       Animated.sequence([
         Animated.timing(darkAnim, {
-          toValue: 1, // Fondo oscuro 
+          toValue: 1, // Fondo oscuro
           duration: 500,
           easing: Easing.inOut(Easing.quad),
           useNativeDriver: true,
@@ -68,8 +70,8 @@ const WelcomeScreen = () => {
     <View style={styles.container}>
       {/* Imagen animada */}
       <Animated.View style={[styles.backgroundContainer, { opacity: fadeAnim }]}>
-        <Animated.Image
-          source={images[currentSlide]}
+        <Image
+          source={images[currentSlide]} // Usar imágenes require
           style={styles.background}
           resizeMode="cover"
         />
@@ -78,14 +80,12 @@ const WelcomeScreen = () => {
       </Animated.View>
 
       {/* Fondo oscuro para transición */}
-      <Animated.View
-        style={[styles.transitionOverlay, { opacity: darkAnim }]}
-      />
+      <Animated.View style={[styles.transitionOverlay, { opacity: darkAnim }]} />
 
       {/* Contenido superpuesto */}
       <View style={styles.logoContainer}>
         <Image
-          source={require('../assets/logo.png')} 
+          source={require('../assets/logo.png')} // Logo como require
           style={styles.logo}
           resizeMode="contain"
         />
@@ -176,10 +176,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  socialContainer: {
-    flexDirection: 'row',
-    marginTop: 20,
-  },
   termsText: {
     color: '#fff',
     fontSize: 12,
@@ -201,3 +197,5 @@ const styles = StyleSheet.create({
 });
 
 export default WelcomeScreen;
+
+
