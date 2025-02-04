@@ -7,6 +7,7 @@ import RegisterScreen from './screens/RegisterScreen';
 import PhoneVerificationScreen from './screens/PhoneVerificationScreen';
 import CodeVerificationScreen from './screens/CodeVerificationScreen';
 import PasswordResetScreen from './screens/PasswordResetScreen';
+import GameDetailScreen from './screens/GameDetailScreen';
 import AddGame from './screens/AddGame';
 import AppNavigator from './AppNavigator'; 
 
@@ -40,6 +41,7 @@ export default function App() {
           <Stack.Screen name="Home" component={AppNavigator} />
         )}
         <Stack.Screen name="AddGame" component={AddGame} />
+        <Stack.Screen name="Details" component={GameDetailScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

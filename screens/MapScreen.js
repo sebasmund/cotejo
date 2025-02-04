@@ -4,17 +4,20 @@ import {
   View,
   StyleSheet,
   Text,
-  Button,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
 } from 'react-native';
-import MapView, { Marker, Callout } from 'react-native-maps';
+import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../firebaseConfig';
+import { ref, onValue } from 'firebase/database';
+import { database } from '../firebaseConfig';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons'; // Para los iconos
 
 const MapScreen = () => {
   const [games, setGames] = useState([]);
   const [currentLocation, setCurrentLocation] = useState(null);
+  const [selectedGame, setSelectedGame] = useState(null); // Estado para el partido seleccionado
   const navigation = useNavigation();
 
   useEffect(() => {
@@ -31,29 +34,30 @@ const MapScreen = () => {
       });
     };
 
-    const fetchGames = async () => {
+    const fetchGames = () => {
       try {
-        // Se utiliza Firestore para obtener los juegos
-        const querySnapshot = await getDocs(collection(db, 'games'));
-        const fetchedGames = [];
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          fetchedGames.push({
-            id: doc.id,
-            title: data.title,
-            latitude: data.latitude,
-            longitude: data.longitude,
-            address: data.address,
-            date: data.date,
-            time: data.time,
-            players: data.players,
-            price: data.price,
-            slots: data.slots,
-            // Construimos una descripción detallada para la tarjeta
-            description: `Dirección: ${data.address}\nFecha: ${data.date}\nHora: ${data.time}\nJugadores: ${data.players}\nPrecio: $${data.price}\nCupos: ${data.slots}`,
-          });
+        const gamesRef = ref(database, 'games'); // Asegúrate de que 'games' sea la ruta correcta
+        onValue(gamesRef, (snapshot) => {
+          const data = snapshot.val();
+          if (data) {
+            const fetchedGames = Object.keys(data).map((key) => ({
+              id: key,
+              title: data[key].title,
+              latitude: data[key].latitude,
+              longitude: data[key].longitude,
+              address: data[key].address,
+              date: data[key].date,
+              time: data[key].time,
+              players: data[key].players,
+              price: data[key].price,
+              slots: data[key].slots,
+              description: `Dirección: ${data[key].address}\nFecha: ${data[key].date}\nHora: ${data[key].time}\nJugadores: ${data[key].players}\nPrecio: $${data[key].price}\nCupos: ${data[key].slots}`,
+            }));
+            setGames(fetchedGames);
+          }
+        }, (error) => {
+          console.error('Error fetching games:', error);
         });
-        setGames(fetchedGames);
       } catch (error) {
         console.error('Error fetching games:', error);
       }
@@ -72,64 +76,92 @@ const MapScreen = () => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <MapView
-        style={styles.map}
-        showsUserLocation={true}
-        initialRegion={{
-          latitude: currentLocation.latitude,
-          longitude: currentLocation.longitude,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
-        }}
-        customMapStyle={googleMapStyle} // Estilo personalizado (opcional)
-      >
-        {games.map((game) => (
-          <Marker
-            key={game.id}
-            coordinate={{ latitude: game.latitude, longitude: game.longitude }}
-            title={game.title}
-            pinColor="green"
-          >
-            <Callout tooltip>
-              <View style={styles.calloutCard}>
-                <Text style={styles.calloutTitle}>{game.title}</Text>
-                <Text style={styles.calloutText}>
-                  <Text style={styles.label}>Dirección: </Text>
-                  {game.address}
-                </Text>
-                <Text style={styles.calloutText}>
-                  <Text style={styles.label}>Fecha: </Text>
-                  {game.date}
-                </Text>
-                <Text style={styles.calloutText}>
-                  <Text style={styles.label}>Hora: </Text>
-                  {game.time}
-                </Text>
-                <Text style={styles.calloutText}>
-                  <Text style={styles.label}>Jugadores: </Text>
-                  {game.players || 'Sin jugadores'}
-                </Text>
-                <Text style={styles.calloutText}>
-                  <Text style={styles.label}>Cupos: </Text>
-                  {game.slots || 'No disponible'}
-                </Text>
-                <Text style={styles.calloutText}>
-                  <Text style={styles.label}>Precio: </Text>
-                  ${game.price}
-                </Text>
-                <Button
-                  title="Ver detalles"
+    <TouchableWithoutFeedback onPress={() => setSelectedGame(null)}>
+      <SafeAreaView style={styles.container}>
+        <MapView
+          style={styles.map}
+          showsUserLocation={true}
+          initialRegion={{
+            latitude: currentLocation.latitude,
+            longitude: currentLocation.longitude,
+            latitudeDelta: 0.0922,
+            longitudeDelta: 0.0421,
+          }}
+          customMapStyle={googleMapStyle} // Estilo personalizado (opcional)
+        >
+          {games.map((game) => (
+            <Marker
+              key={game.id}
+              coordinate={{ latitude: game.latitude, longitude: game.longitude }}
+              title={game.title}
+              pinColor="#33883F"
+              onPress={() => setSelectedGame(game)} // Al tocar el pin, se selecciona el partido
+            />
+          ))}
+        </MapView>
+
+        {/* Tarjeta de detalles del partido */}
+        {selectedGame && (
+          <View style={styles.cardContainer}>
+            <View style={styles.card}>
+              {/* Botón de cerrar (X) */}
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setSelectedGame(null)}
+              >
+                <Ionicons name="close" size={24} color="#555" />
+              </TouchableOpacity>
+
+              <Text style={styles.cardTitle}>{selectedGame.title}</Text>
+
+              {/* Detalles con iconos */}
+              <View style={styles.detailsContainer}>
+                <View style={styles.detailsColumn}>
+                  <View style={styles.detailRow}>
+                    <Ionicons name="location" size={16} color="#555" />
+                    <Text style={styles.cardText}>{selectedGame.address}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Ionicons name="calendar" size={16} color="#555" />
+                    <Text style={styles.cardText}>{selectedGame.date}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Ionicons name="time" size={16} color="#555" />
+                    <Text style={styles.cardText}>{selectedGame.time}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Ionicons name="people" size={16} color="#555" />
+                    <Text style={styles.cardText}>
+                      {selectedGame.players || 'Sin jugadores'}
+                    </Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Ionicons name="ticket" size={16} color="#555" />
+                    <Text style={styles.cardText}>
+                      {selectedGame.slots || 'No disponible'}
+                    </Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Ionicons name="cash" size={16} color="#555" />
+                    <Text style={styles.cardText}>${selectedGame.price}</Text>
+                  </View>
+                </View>
+
+                {/* Botón "Ver detalles" a la derecha */}
+                <TouchableOpacity
+                  style={styles.detailsButton}
                   onPress={() =>
-                    navigation.navigate('GameDetails', { gameId: game.id })
+                    navigation.navigate('Details', { game: selectedGame })
                   }
-                />
+                >
+                  <Text style={styles.detailsButtonText}>Ver detalles</Text>
+                </TouchableOpacity>
               </View>
-            </Callout>
-          </Marker>
-        ))}
-      </MapView>
-    </SafeAreaView>
+            </View>
+          </View>
+        )}
+      </SafeAreaView>
+    </TouchableWithoutFeedback>
   );
 };
 
@@ -229,9 +261,16 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
-  calloutCard: {
-    width: 250,
-    padding: 10,
+  cardContainer: {
+    position: 'absolute',
+    bottom: 80, 
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+  },
+  card: {
+    width: '90%',
+    padding: 15,
     backgroundColor: '#fff',
     borderRadius: 10,
     shadowColor: '#000',
@@ -239,17 +278,44 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 3,
   },
-  calloutTitle: {
+  cardTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 5,
+    marginBottom: 10,
+    textAlign: 'center',
   },
-  calloutText: {
+  detailsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  detailsColumn: {
+    flex: 1,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 5,
+  },
+  cardText: {
     fontSize: 14,
     color: '#555',
-    marginVertical: 2,
+    marginLeft: 10,
   },
-  label: {
+  closeButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+  },
+  detailsButton: {
+    backgroundColor: '#33883F', 
+    padding: 10,
+    borderRadius: 5,
+    marginLeft: 10,
+  },
+  detailsButtonText: {
+    color: '#fff',
+    fontSize: 14,
     fontWeight: 'bold',
   },
   loadingContainer: {

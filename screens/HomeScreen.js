@@ -7,13 +7,12 @@ import {
   FlatList,
   StyleSheet,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Button } from 'react-native-elements';
 import moment from 'moment';
 import { database } from '../firebaseConfig';
-import { ref, onValue, update } from 'firebase/database';
+import { ref, onValue } from 'firebase/database';
 import { useNavigation } from '@react-navigation/native';
 import 'moment/locale/es';
 moment.locale('es');
@@ -33,30 +32,6 @@ export default function HomeScreen() {
       moment(game.date, 'YYYY-MM-DD', true).isSame(date, 'day')
     );
     setFilteredGames(filtered);
-  };
-
-  const handleJoinGame = (gameId, currentSlots) => {
-    if (currentSlots > 0) {
-      const gameRef = ref(database, `games/${gameId}`);
-      update(gameRef, { slots: currentSlots - 1 })
-        .then(() => {
-          Alert.alert(
-            'Unido correctamente',
-            'Has sido añadido al juego y el número de cupos ha sido actualizado.',
-            [{ text: 'OK' }]
-          );
-        })
-        .catch((error) => {
-          Alert.alert('Error', 'Hubo un problema al unirse al juego.', [{ text: 'OK' }]);
-          console.error('Error al unirse al juego:', error);
-        });
-    } else {
-      Alert.alert(
-        'Sin cupos disponibles',
-        'Lo sentimos, este juego ya no tiene cupos disponibles.',
-        [{ text: 'OK' }]
-      );
-    }
   };
 
   // Filtrar juegos por texto de búsqueda
@@ -202,9 +177,9 @@ export default function HomeScreen() {
                     <Text style={styles.cardPrice}> ${item.price}</Text>
                   </View>
                   <Button
-                    title="Unirse"
-                    buttonStyle={styles.joinButton}
-                    onPress={() => handleJoinGame(item.id, item.slots)}
+                    title="Detalles"
+                    buttonStyle={styles.detailsButton}
+                    onPress={() => navigation.navigate('Details', { game: item })}
                   />
                 </View>
               </View>
@@ -331,7 +306,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginLeft: 5,
   },
-  joinButton: {
+  detailsButton: {
     backgroundColor: '#33883F',
     paddingHorizontal: 20,
   },
