@@ -1,12 +1,12 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { PhoneAuthProvider, signInWithCredential } from 'firebase/auth';
-import { auth } from '../firebaseConfig';
+import { PhoneAuthProvider } from 'firebase/auth';
 
 const CodeVerificationScreen = ({ route, navigation }) => {
   const { verificationId, phoneNumber } = route.params;
-  const [code, setCode] = useState(['', '', '', '', '', '']); // Array para 6 cuadros
-  const inputs = useRef([]); // Referencias a los cuadros de texto
+  const [code, setCode] = useState(['', '', '', '', '', '']);
+  const [errorMessage, setErrorMessage] = useState('');
+  const inputRefs = useRef([]);
 
   const verifyCode = async () => {
     const fullCode = code.join('');
@@ -17,8 +17,7 @@ const CodeVerificationScreen = ({ route, navigation }) => {
 
     try {
       const credential = PhoneAuthProvider.credential(verificationId, fullCode);
-      await signInWithCredential(auth, credential);
-      Alert.alert('Verificación exitosa', 'Tu número ha sido verificado.');
+      Alert.alert('Número verificado', 'Tu número ha sido validado. Continúa con el registro.');
       navigation.navigate('Register', { phoneNumber });
     } catch (error) {
       Alert.alert('Error', 'El código de verificación es inválido. Inténtalo de nuevo.');
@@ -26,21 +25,33 @@ const CodeVerificationScreen = ({ route, navigation }) => {
   };
 
   const handleInputChange = (text, index) => {
+    // Si se pega (o se ingresan varios caracteres de una vez)
     if (text.length > 1) {
-      text = text[text.length - 1]; // Asegúrate de que solo se tome el último dígito
-    }
-    const newCode = [...code];
-    newCode[index] = text;
-    setCode(newCode);
-
-    if (text && index < 5) {
-      inputs.current[index + 1].focus(); // Pasa al siguiente cuadro
+      // Extraemos solo dígitos, tomamos los primeros 6 y los separamos
+      const pastedCode = text.replace(/\D/g, '').slice(0, 6).split('');
+      setCode(pastedCode);
+      pastedCode.forEach((char, i) => {
+        if (inputRefs.current[i]) {
+          inputRefs.current[i].setNativeProps({ text: char });
+        }
+      });
+      if (inputRefs.current[5]) {
+        inputRefs.current[5].focus();
+      }
+    } else {
+      // Ingreso normal de un dígito
+      const newCode = [...code];
+      newCode[index] = text;
+      setCode(newCode);
+      if (text && index < 5) {
+        inputRefs.current[index + 1].focus();
+      }
     }
   };
 
-  const handleKeyPress = (e, index) => {
-    if (e.nativeEvent.key === 'Backspace' && index > 0 && !code[index]) {
-      inputs.current[index - 1].focus(); // Vuelve al cuadro anterior
+  const handleKeyPress = (event, index) => {
+    if (event.nativeEvent.key === 'Backspace' && !code[index] && index > 0) {
+      inputRefs.current[index - 1].focus();
     }
   };
 
@@ -53,20 +64,25 @@ const CodeVerificationScreen = ({ route, navigation }) => {
         {code.map((value, index) => (
           <TextInput
             key={index}
-            ref={(ref) => (inputs.current[index] = ref)}
+            ref={(ref) => (inputRefs.current[index] = ref)}
             style={styles.codeInput}
             value={value}
             onChangeText={(text) => handleInputChange(text, index)}
-            onKeyPress={(e) => handleKeyPress(e, index)}
-            maxLength={1}
+            onKeyPress={(event) => handleKeyPress(event, index)}
+            // Para el primer campo permitimos pegar hasta 6 caracteres; los demás se mantienen en 1
+            maxLength={index === 0 ? 6 : 1}
             keyboardType="number-pad"
+            autoCapitalize="none"
           />
         ))}
       </View>
 
+      {errorMessage !== '' && (
+        <Text style={styles.errorText}>{errorMessage}</Text>
+      )}
+
       <Text style={styles.helperText}>
-        ¿No recibiste el código?{''}
-        Regresa y verifica que tu número es correcto.
+        ¿No recibiste el código? Regresa y verifica que tu número es correcto.
       </Text>
 
       <TouchableOpacity style={styles.verifyButton} onPress={verifyCode}>
@@ -112,19 +128,16 @@ const styles = StyleSheet.create({
     fontSize: 24,
     marginHorizontal: 5,
   },
+  errorText: {
+    color: 'red',
+    fontSize: 14,
+    marginBottom: 10,
+  },
   helperText: {
     fontSize: 14,
     textAlign: 'center',
     color: '#666',
     marginBottom: 20,
-  },
-  resendButton: {
-    marginBottom: 30,
-  },
-  resendButtonText: {
-    fontSize: 16,
-    color: '#33883F',
-    textDecorationLine: 'underline',
   },
   verifyButton: {
     backgroundColor: '#33883F',

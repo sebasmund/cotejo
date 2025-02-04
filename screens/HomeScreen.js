@@ -1,41 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import {
+  SafeAreaView,
   View,
   Text,
   TextInput,
   FlatList,
   StyleSheet,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Button } from 'react-native-elements';
 import moment from 'moment';
-import { SafeAreaView } from 'react-native';
 import { database } from '../firebaseConfig';
 import { ref, onValue, update } from 'firebase/database';
-import { useNavigation } from '@react-navigation/native'; // Para redireccionar
+import { useNavigation } from '@react-navigation/native';
 import 'moment/locale/es';
 moment.locale('es');
-import { Alert } from 'react-native';
 
 export default function HomeScreen() {
   const [selectedDate, setSelectedDate] = useState(null);
   const [games, setGames] = useState([]);
   const [filteredGames, setFilteredGames] = useState([]);
   const [searchText, setSearchText] = useState('');
-  //const [isFilterMenuVisible, setIsFilterMenuVisible] = useState(false); // Control del menú lateral
-  const navigation = useNavigation(); // Hook para navegación
+  const navigation = useNavigation();
 
   // Filtrar juegos por fecha
   const handleDatePress = (date) => {
     if (!date) return;
     setSelectedDate(date);
-    const filtered = games.filter(
-      (game) => moment(game.date, 'YYYY-MM-DD', true).isSame(date, 'day')
+    const filtered = games.filter((game) =>
+      moment(game.date, 'YYYY-MM-DD', true).isSame(date, 'day')
     );
     setFilteredGames(filtered);
   };
-  
+
   const handleJoinGame = (gameId, currentSlots) => {
     if (currentSlots > 0) {
       const gameRef = ref(database, `games/${gameId}`);
@@ -48,9 +47,7 @@ export default function HomeScreen() {
           );
         })
         .catch((error) => {
-          Alert.alert('Error', 'Hubo un problema al unirse al juego.', [
-            { text: 'OK' },
-          ]);
+          Alert.alert('Error', 'Hubo un problema al unirse al juego.', [{ text: 'OK' }]);
           console.error('Error al unirse al juego:', error);
         });
     } else {
@@ -77,6 +74,7 @@ export default function HomeScreen() {
     setFilteredGames(filtered);
   };
 
+  // Renderizar el calendario con fechas completas
   const renderCalendar = () => {
     const days = [];
     for (let i = 0; i < 6; i++) {
@@ -84,7 +82,7 @@ export default function HomeScreen() {
       days.push({
         label: day.format('ddd').toUpperCase().replace('.', ''),
         number: day.format('D'),
-        value: day.format('D'),
+        value: day.format('YYYY-MM-DD'),
       });
     }
 
@@ -117,9 +115,9 @@ export default function HomeScreen() {
     ));
   };
 
-  // Cargar juegos desde Firebase y seleccionar la primera fecha disponible
+  // Cargar juegos desde Firebase y seleccionar la fecha de hoy
   useEffect(() => {
-    const gamesRef = ref(database, "games");
+    const gamesRef = ref(database, 'games');
     const unsubscribe = onValue(
       gamesRef,
       (snapshot) => {
@@ -130,17 +128,15 @@ export default function HomeScreen() {
             ...value,
           }));
           setGames(gamesArray);
-  
-          // Seleccionar la primera fecha disponible
-          const firstDate = moment().format("YYYY-MM-DD"); // Fecha completa de hoy
+
+          const firstDate = moment().format('YYYY-MM-DD');
           setSelectedDate(firstDate);
-  
-          // Filtrar juegos por la primera fecha
+
           const filtered = gamesArray.filter((game) => {
-            const gameDate = moment(game.date, "YYYY-MM-DD", true); // Validación estricta
-            return gameDate.isValid() && gameDate.isSame(firstDate, "day");
+            const gameDate = moment(game.date, 'YYYY-MM-DD', true);
+            return gameDate.isValid() && gameDate.isSame(firstDate, 'day');
           });
-  
+
           setFilteredGames(filtered);
         } else {
           setGames([]);
@@ -148,10 +144,10 @@ export default function HomeScreen() {
         }
       },
       (error) => {
-        console.error("Error fetching data from Firebase:", error);
+        console.error('Error fetching data from Firebase:', error);
       }
     );
-  
+
     return () => unsubscribe();
   }, []);
 
@@ -166,22 +162,10 @@ export default function HomeScreen() {
             placeholder="Buscar juegos"
             placeholderTextColor="#aaa"
             value={searchText}
-            onChangeText={handleSearch} // Manejar texto
+            onChangeText={handleSearch}
           />
         </View>
-        {/* Botón de filtro 
-        <TouchableOpacity
-          style={styles.iconButton}
-          onPress={() => setIsFilterMenuVisible(!isFilterMenuVisible)}
-        >
-          <Ionicons name="filter-outline" size={24} color="#000" />
-        </TouchableOpacity>*/}
-        
-        {/* Botón de añadir */}
-        <TouchableOpacity
-          style={styles.iconButton}
-          onPress={() => navigation.navigate('AddGame')} // Redireccionar
-        >
+        <TouchableOpacity style={styles.iconButton} onPress={() => navigation.navigate('AddGame')}>
           <Ionicons name="add-outline" size={24} color="#000" />
         </TouchableOpacity>
       </View>
@@ -190,50 +174,55 @@ export default function HomeScreen() {
       <View style={styles.calendarContainer}>{renderCalendar()}</View>
 
       {/* Lista de juegos */}
-      <FlatList
-        data={filteredGames}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <View style={styles.cardContent}>
-              <Text style={styles.cardTitle}>{item.title}</Text>
-              <Text style={styles.cardText}>
-                <Ionicons name="location-outline" size={18} color="#33883F" />{' '}
-                {item.address}
-              </Text>
-              <Text style={styles.cardText}>
-                <Ionicons name="time-outline" size={18} color="#33883F" /> {item.time}
-              </Text>
-              <Text style={styles.cardText}>
-                <Ionicons name="people-outline" size={18} color="#33883F" />{' '}
-                {item.players || 'Sin jugadores'}
-              </Text>
-              <Text style={styles.cardText}>
-                <Ionicons name="grid-outline" size={18} color="#33883F" /> Espacios disponibles:{' '}
-                {item.slots || 'No disponible'}
-              </Text>
-              <View style={styles.footerContainer}>
-                <View style={styles.priceInfo}>
-                  <Ionicons name="pricetag-outline" size={18} color="#33883F" />
-                  <Text style={styles.cardPrice}> ${item.price}</Text>
+      <View style={styles.listContainer}>
+        <FlatList
+          data={filteredGames}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <View style={styles.card}>
+              <View style={styles.cardContent}>
+                <Text style={styles.cardTitle}>{item.title}</Text>
+                <Text style={styles.cardText}>
+                  <Ionicons name="location-outline" size={18} color="#33883F" /> {item.address}
+                </Text>
+                <Text style={styles.cardText}>
+                  <Ionicons name="time-outline" size={18} color="#33883F" /> {item.time}
+                </Text>
+                <Text style={styles.cardText}>
+                  <Ionicons name="people-outline" size={18} color="#33883F" />{' '}
+                  {item.players || 'Sin jugadores'}
+                </Text>
+                <Text style={styles.cardText}>
+                  <Ionicons name="grid-outline" size={18} color="#33883F" /> Espacios disponibles:{' '}
+                  {item.slots || 'No disponible'}
+                </Text>
+                <View style={styles.footerContainer}>
+                  <View style={styles.priceInfo}>
+                    <Ionicons name="pricetag-outline" size={18} color="#33883F" />
+                    <Text style={styles.cardPrice}> ${item.price}</Text>
+                  </View>
+                  <Button
+                    title="Unirse"
+                    buttonStyle={styles.joinButton}
+                    onPress={() => handleJoinGame(item.id, item.slots)}
+                  />
                 </View>
-                <Button
-                  title="Unirse"
-                  buttonStyle={styles.joinButton}
-                  onPress={() => handleJoinGame(item.id, item.slots)}
-                />
               </View>
             </View>
-          </View>
-        )}
-      />
+          )}
+        />
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
   header: {
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -242,9 +231,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   searchBar: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
     backgroundColor: '#eee',
     borderRadius: 8,
     marginRight: 10,
@@ -262,12 +251,12 @@ const styles = StyleSheet.create({
     padding: 8,
     backgroundColor: '#f5f5f5',
     borderRadius: 10,
-    marginLeft: 10,
   },
   calendarContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     marginVertical: 10,
+    width: '100%',
   },
   dateButton: {
     width: 55,
@@ -288,7 +277,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   selectedDateLabel: {
-    color: '#fff', // Texto blanco cuando está seleccionado
+    color: '#fff',
     fontWeight: 'bold',
   },
   dateNumber: {
@@ -297,8 +286,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   selectedDateNumber: {
-    color: '#fff', // Número blanco cuando está seleccionado
+    color: '#fff',
     fontWeight: 'bold',
+  },
+  listContainer: {
+    flex: 1,
+    paddingHorizontal: 10,
   },
   card: {
     margin: 10,
