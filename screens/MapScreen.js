@@ -12,7 +12,7 @@ import * as Location from 'expo-location';
 import { ref, onValue } from 'firebase/database';
 import { database } from '../firebaseConfig';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons'; // Para los iconos
+import { Ionicons } from '@expo/vector-icons'; 
 
 const MapScreen = () => {
   const [games, setGames] = useState([]);
@@ -36,7 +36,7 @@ const MapScreen = () => {
 
     const fetchGames = () => {
       try {
-        const gamesRef = ref(database, 'games'); // Asegúrate de que 'games' sea la ruta correcta
+        const gamesRef = ref(database, 'games'); 
         onValue(gamesRef, (snapshot) => {
           const data = snapshot.val();
           if (data) {
@@ -87,7 +87,7 @@ const MapScreen = () => {
             latitudeDelta: 0.0922,
             longitudeDelta: 0.0421,
           }}
-          customMapStyle={googleMapStyle} // Estilo personalizado (opcional)
+          customMapStyle={googleMapStyle} 
         >
           {games.map((game) => (
             <Marker

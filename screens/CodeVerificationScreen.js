@@ -25,9 +25,9 @@ const CodeVerificationScreen = ({ route, navigation }) => {
   };
 
   const handleInputChange = (text, index) => {
-    // Si se pega (o se ingresan varios caracteres de una vez)
+    // Si se pega o se ingresan varios caracteres de una vez
     if (text.length > 1) {
-      // Extraemos solo dígitos, tomamos los primeros 6 y los separamos
+      // Extraer solo digitos, primeros 6 y separar
       const pastedCode = text.replace(/\D/g, '').slice(0, 6).split('');
       setCode(pastedCode);
       pastedCode.forEach((char, i) => {
@@ -69,7 +69,7 @@ const CodeVerificationScreen = ({ route, navigation }) => {
             value={value}
             onChangeText={(text) => handleInputChange(text, index)}
             onKeyPress={(event) => handleKeyPress(event, index)}
-            // Para el primer campo permitimos pegar hasta 6 caracteres; los demás se mantienen en 1
+            // Para el primer campo permite pegar hasta 6 caracteres los demas se mantienen en 1
             maxLength={index === 0 ? 6 : 1}
             keyboardType="number-pad"
             autoCapitalize="none"

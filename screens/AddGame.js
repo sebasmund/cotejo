@@ -9,7 +9,7 @@ import {
   SafeAreaView,
   ScrollView,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker'; // Date and Time Picker
+import DateTimePicker from '@react-native-community/datetimepicker'; 
 import { database } from '../firebaseConfig';
 import { ref, push } from 'firebase/database';
 
