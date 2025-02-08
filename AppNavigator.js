@@ -7,6 +7,7 @@ import UserScreen from './screens/UserScreen';
 import MessageScreen from './screens/MessageScreen';
 import MapScreen from './screens/MapScreen';
 import NotificationScreen from './screens/NotificationScreen';
+import SocialScreen from './screens/SocialScreen'; // Asegúrate de que la ruta sea correcta
 
 const Tab = createBottomTabNavigator();
 
@@ -54,8 +55,7 @@ export default function AppNavigator() {
         >
           <Tab.Screen name="Inicio" component={HomeScreen} />
           <Tab.Screen name="Mapa" component={MapScreen} />
-          <Tab.Screen name="Social" component={MessageScreen} />
-          <Tab.Screen name="Reservar" component={NotificationScreen} />
+          <Tab.Screen name="Social" component={SocialScreen} />
           <Tab.Screen name="Perfil" component={UserScreen} />
         </Tab.Navigator>
       </SafeAreaView>
