@@ -19,13 +19,13 @@ const PhoneVerificationScreen = ({ navigation, route }) => {
     const fullPhoneNumber = formatPhoneNumber(inputNumber);
     try {
       // Consulta directa en el nodo de índice (asegúrate de que en userPhoneNumbers se almacene sin prefijo)
-      const phoneRef = ref(database, `userPhoneNumbers/${fullPhoneNumber}`);
+      const phoneRef = ref(database, `userPhoneNumbers/${fullPhoneNumber.replace('+', '')}`); // Elimina el "+" para buscar
       const snapshot = await get(phoneRef);
       console.log("Buscando el número:", fullPhoneNumber, "resultado:", snapshot.val());
-      return snapshot.exists();
+      return snapshot.exists(); // Retorna true si el número existe
     } catch (error) {
       console.log("Error al verificar el número de teléfono:", error);
-      return false;
+      return false; // Retorna false si hay un error
     }
   };
 
@@ -92,10 +92,6 @@ const PhoneVerificationScreen = ({ navigation, route }) => {
         />
       </View>
 
-      {/*<Text style={styles.captchaHint}>
-        La verificación captcha se realizará de forma invisible.
-      </Text>*/}
-
       <TouchableOpacity style={styles.button} onPress={sendVerificationCode}>
         <Text style={styles.buttonText}>Enviar Código</Text>
       </TouchableOpacity>
@@ -150,11 +146,6 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
-  },
-  captchaHint: {
-    fontSize: 14,
-    color: '#33883F',
-    marginBottom: 20,
   },
   button: {
     backgroundColor: '#33883F',

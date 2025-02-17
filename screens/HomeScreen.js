@@ -11,8 +11,8 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Button } from 'react-native-elements';
 import moment from 'moment';
-import { database } from '../firebaseConfig';
-import { ref, onValue } from 'firebase/database';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../firebaseConfig';
 import { useNavigation } from '@react-navigation/native';
 import 'moment/locale/es';
 moment.locale('es');
@@ -28,9 +28,11 @@ export default function HomeScreen() {
   const handleDatePress = (date) => {
     if (!date) return;
     setSelectedDate(date);
-    const filtered = games.filter((game) =>
-      moment(game.date, 'YYYY-MM-DD', true).isSame(date, 'day')
-    );
+    const filtered = games.filter((game) => {
+      if (!game.dateTime) return false; // Ignora juegos sin fecha
+      const gameDate = moment(game.dateTime.toDate()).format('YYYY-MM-DD');
+      return gameDate === date;
+    });
     setFilteredGames(filtered);
   };
 
@@ -90,40 +92,40 @@ export default function HomeScreen() {
     ));
   };
 
-  // Cargar juegos desde Firebase y seleccionar la fecha de hoy
+  // Cargar juegos desde Firestore y seleccionar la fecha de hoy
   useEffect(() => {
-    const gamesRef = ref(database, 'games');
-    const unsubscribe = onValue(
-      gamesRef,
-      (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-          const gamesArray = Object.entries(data).map(([key, value]) => ({
-            id: key,
-            ...value,
-          }));
-          setGames(gamesArray);
+    const fetchGames = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'games'));
+        const gamesArray = querySnapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            dateTime: data.dateTime || null, // Usa el campo correcto (dateTime)
+          };
+        });
 
-          const firstDate = moment().format('YYYY-MM-DD');
-          setSelectedDate(firstDate);
+        //console.log('Games loaded:', gamesArray); // Verifica los datos cargados
 
-          const filtered = gamesArray.filter((game) => {
-            const gameDate = moment(game.date, 'YYYY-MM-DD', true);
-            return gameDate.isValid() && gameDate.isSame(firstDate, 'day');
-          });
+        setGames(gamesArray);
 
-          setFilteredGames(filtered);
-        } else {
-          setGames([]);
-          setFilteredGames([]);
-        }
-      },
-      (error) => {
-        console.error('Error fetching data from Firebase:', error);
+        const firstDate = moment().format('YYYY-MM-DD');
+        setSelectedDate(firstDate);
+
+        const filtered = gamesArray.filter((game) => {
+          if (!game.dateTime) return false; // Ignora juegos sin fecha
+          const gameDate = moment(game.dateTime.toDate()).format('YYYY-MM-DD');
+          return gameDate === firstDate;
+        });
+
+        setFilteredGames(filtered);
+      } catch (error) {
+        console.error('Error fetching games from Firestore:', error);
       }
-    );
+    };
 
-    return () => unsubscribe();
+    fetchGames();
   }, []);
 
   return (
@@ -153,38 +155,43 @@ export default function HomeScreen() {
         <FlatList
           data={filteredGames}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <View style={styles.card}>
-              <View style={styles.cardContent}>
-                <Text style={styles.cardTitle}>{item.title}</Text>
-                <Text style={styles.cardText}>
-                  <Ionicons name="location-outline" size={18} color="#33883F" /> {item.address}
-                </Text>
-                <Text style={styles.cardText}>
-                  <Ionicons name="time-outline" size={18} color="#33883F" /> {item.time}
-                </Text>
-                <Text style={styles.cardText}>
-                  <Ionicons name="people-outline" size={18} color="#33883F" />{' '}
-                  {item.players || 'Sin jugadores'}
-                </Text>
-                <Text style={styles.cardText}>
-                  <Ionicons name="grid-outline" size={18} color="#33883F" /> Espacios disponibles:{' '}
-                  {item.slots || 'No disponible'}
-                </Text>
-                <View style={styles.footerContainer}>
-                  <View style={styles.priceInfo}>
-                    <Ionicons name="pricetag-outline" size={18} color="#33883F" />
-                    <Text style={styles.cardPrice}> ${item.price}</Text>
+          renderItem={({ item }) => {
+            const gameDate = item.dateTime ? moment(item.dateTime.toDate()).format('YYYY-MM-DD') : 'Fecha no disponible';
+            const gameTime = item.dateTime ? moment(item.dateTime.toDate()).format('hh:mm A') : 'Hora no disponible'; // Formato AM/PM
+
+            return (
+              <View style={styles.card}>
+                <View style={styles.cardContent}>
+                  <Text style={styles.cardTitle}>{item.title}</Text>
+                  <Text style={styles.cardText}>
+                    <Ionicons name="location-outline" size={18} color="#33883F" /> {item.address}
+                  </Text>
+                  <Text style={styles.cardText}>
+                    <Ionicons name="time-outline" size={18} color="#33883F" /> {gameTime} {/* Hora en AM/PM */}
+                  </Text>
+                  <Text style={styles.cardText}>
+                    <Ionicons name="people-outline" size={18} color="#33883F" />{' '}
+                    {item.players || 'Sin jugadores'}
+                  </Text>
+                  <Text style={styles.cardText}>
+                    <Ionicons name="grid-outline" size={18} color="#33883F" /> Espacios disponibles:{' '}
+                    {item.slots || 'No disponible'}
+                  </Text>
+                  <View style={styles.footerContainer}>
+                    <View style={styles.priceInfo}>
+                      <Ionicons name="pricetag-outline" size={18} color="#33883F" />
+                      <Text style={styles.cardPrice}> ${item.price}</Text>
+                    </View>
+                    <Button
+                      title="Detalles"
+                      buttonStyle={styles.detailsButton}
+                      onPress={() => navigation.navigate('Details', { game: item })}
+                    />
                   </View>
-                  <Button
-                    title="Detalles"
-                    buttonStyle={styles.detailsButton}
-                    onPress={() => navigation.navigate('Details', { game: item })}
-                  />
                 </View>
               </View>
-            </View>
-          )}
+            );
+          }}
         />
       </View>
     </SafeAreaView>
