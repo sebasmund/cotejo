@@ -9,9 +9,9 @@ import {
   SafeAreaView,
   ScrollView,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker'; 
-import { database } from '../firebaseConfig';
-import { ref, push } from 'firebase/database';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { collection, addDoc } from 'firebase/firestore'; // Importa Firestore
+import { db } from '../firebaseConfig'; // Asegúrate de que firebaseConfig esté configurado para Firestore
 
 export default function AddGame() {
   const [title, setTitle] = useState('');
@@ -24,7 +24,7 @@ export default function AddGame() {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const handleAddGame = () => {
+  const handleAddGame = async () => {
     if (!title || !address || !players || !slots || !price) {
       Alert.alert('Campos incompletos', 'Por favor, llena todos los campos.', [
         { text: 'OK' },
@@ -44,7 +44,6 @@ export default function AddGame() {
       return;
     }
 
-    const gamesRef = ref(database, 'games');
     const newGame = {
       title,
       address,
@@ -55,27 +54,31 @@ export default function AddGame() {
       price: parsedPrice,
     };
 
-    push(gamesRef, newGame)
-      .then(() => {
-        Alert.alert(
-          'Partido agregado',
-          'El partido se ha agregado correctamente.',
-          [{ text: 'OK' }]
-        );
-        setTitle('');
-        setAddress('');
-        setTime(new Date());
-        setDate(new Date());
-        setPlayers('');
-        setSlots('');
-        setPrice('');
-      })
-      .catch((error) => {
-        Alert.alert('Error', 'Hubo un problema al agregar el partido.', [
-          { text: 'OK' },
-        ]);
-        console.error('Error al agregar partido:', error);
-      });
+    try {
+      // Guardar el partido en Firestore
+      const docRef = await addDoc(collection(db, 'games'), newGame);
+      console.log('Partido guardado con ID:', docRef.id);
+
+      Alert.alert(
+        'Partido agregado',
+        'El partido se ha agregado correctamente.',
+        [{ text: 'OK' }]
+      );
+
+      // Limpiar el formulario
+      setTitle('');
+      setAddress('');
+      setTime(new Date());
+      setDate(new Date());
+      setPlayers('');
+      setSlots('');
+      setPrice('');
+    } catch (error) {
+      Alert.alert('Error', 'Hubo un problema al agregar el partido.', [
+        { text: 'OK' },
+      ]);
+      console.error('Error al agregar partido:', error);
+    }
   };
 
   return (

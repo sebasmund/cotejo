@@ -31,7 +31,7 @@ export default function AppNavigator() {
               } else if (route.name === 'Perfil') {
                 iconName = focused ? 'person' : 'person-outline';
               }
-
+              
               return <Icon name={iconName} size={size} color={color} />;
             },
             tabBarActiveTintColor: '#33883F',
