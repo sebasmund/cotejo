@@ -1,31 +1,32 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { auth, database } from '../firebaseConfig';
+import { auth, db } from '../firebaseConfig'; // Importación corregida
 import { PhoneAuthProvider } from 'firebase/auth';
 import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
-import { ref, get } from 'firebase/database';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 const PhoneVerificationScreen = ({ navigation, route }) => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const recaptchaVerifier = useRef(null);
 
-  // Función que convierte el número ingresado al formato internacional (+57...)
+  // Convierte el número ingresado al formato internacional (+57...)
   const formatPhoneNumber = (inputNumber) => {
     return inputNumber.startsWith('+57') ? inputNumber : `+57${inputNumber}`;
   };
 
-  // Verifica si el número ya está registrado en la base de datos
+  // Verifica si el número ya está registrado en Firestore
   const checkPhoneNumberExists = async (inputNumber) => {
-    const fullPhoneNumber = formatPhoneNumber(inputNumber);
+    const formattedNumber = formatPhoneNumber(inputNumber); // Asegurar formato
     try {
-      // Consulta directa en el nodo de índice (asegúrate de que en userPhoneNumbers se almacene sin prefijo)
-      const phoneRef = ref(database, `userPhoneNumbers/${fullPhoneNumber.replace('+', '')}`); // Elimina el "+" para buscar
-      const snapshot = await get(phoneRef);
-      console.log("Buscando el número:", fullPhoneNumber, "resultado:", snapshot.val());
-      return snapshot.exists(); // Retorna true si el número existe
+      const usersRef = collection(db, 'users'); // Usar db correctamente
+      const q = query(usersRef, where('phoneNumber', '==', formattedNumber));
+      const querySnapshot = await getDocs(q);
+
+      console.log("Buscando el número:", formattedNumber, "resultado:", !querySnapshot.empty);
+      return !querySnapshot.empty; // Retorna true si el número existe
     } catch (error) {
       console.log("Error al verificar el número de teléfono:", error);
-      return false; // Retorna false si hay un error
+      return false;
     }
   };
 
@@ -34,25 +35,25 @@ const PhoneVerificationScreen = ({ navigation, route }) => {
       Alert.alert('Error', 'Por favor ingresa un número de teléfono válido.');
       return;
     }
-    
-    // Convertir el número ingresado al formato internacional
-    const fullPhoneNumber = formatPhoneNumber(phoneNumber);
 
+    const fullPhoneNumber = formatPhoneNumber(phoneNumber);
+    
     // Verificar si el número ya está registrado
-    const exists = await checkPhoneNumberExists(phoneNumber);
+    const exists = await checkPhoneNumberExists(fullPhoneNumber);
     if (exists) {
-      Alert.alert('Número registrado', 'El número de teléfono ya se encuentra registrado.');
+      Alert.alert('Número registrado', 'El número de teléfono ya está registrado.');
       return;
     }
-    
+
     try {
       const provider = new PhoneAuthProvider(auth);
       const verificationId = await provider.verifyPhoneNumber(
         fullPhoneNumber,
         recaptchaVerifier.current
       );
-      Alert.alert('Código enviado', 'Por favor revisa tu teléfono.');
-      // Se envía el número ya formateado para mantener consistencia
+      Alert.alert('Código enviado', 'Revisa tu teléfono.');
+      
+      // Navegar a la pantalla de código con el número formateado
       navigation.navigate('Code', { verificationId, phoneNumber: fullPhoneNumber });
     } catch (error) {
       Alert.alert('Error', error.message);
@@ -69,22 +70,21 @@ const PhoneVerificationScreen = ({ navigation, route }) => {
 
   return (
     <View style={styles.container}>
-      {/* Se utiliza el modal de reCAPTCHA en modo invisible */}
       <FirebaseRecaptchaVerifierModal
         ref={recaptchaVerifier}
         firebaseConfig={auth.app.options}
         attemptInvisibleVerification={true}
       />
-      <Text style={styles.title}>Únete a cotejo</Text>
+      <Text style={styles.title}>Únete a Cotejo</Text>
       <Text style={styles.subtitle}>
         Estás a solo unos pasos de tu próximo partido de fútbol
       </Text>
-      
+
       <View style={styles.inputContainer}>
         <Text style={styles.flag}>🇨🇴</Text>
         <TextInput
           style={styles.input}
-          placeholder="Número de teléfono"
+          placeholder="Número de celular"
           value={phoneNumber}
           onChangeText={setPhoneNumber}
           keyboardType="number-pad"

@@ -22,10 +22,10 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 // Initialize Analytics (Optional, works only on web and supported platforms)
-let analytics;
-if (typeof window !== "undefined") {
-  analytics = getAnalytics(app);
-}
+//let analytics;
+//if (typeof window !== "undefined") {
+//  analytics = getAnalytics(app);
+//}
 
 // Initialize Firestore
 const db = getFirestore(app);
@@ -39,4 +39,4 @@ const auth = initializeAuth(app, {
 });
 
 // Export all initialized services
-export { app, analytics, db, auth, database };
+export { app, db, auth, database }; //,analytics

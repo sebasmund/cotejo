@@ -1,11 +1,11 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { PhoneAuthProvider } from 'firebase/auth';
+import { PhoneAuthProvider, signInWithCredential, deleteUser } from 'firebase/auth';
+import { auth } from '../firebaseConfig';
 
 const CodeVerificationScreen = ({ route, navigation }) => {
   const { verificationId, phoneNumber } = route.params;
   const [code, setCode] = useState(['', '', '', '', '', '']);
-  const [errorMessage, setErrorMessage] = useState('');
   const inputRefs = useRef([]);
 
   const verifyCode = async () => {
@@ -17,41 +17,53 @@ const CodeVerificationScreen = ({ route, navigation }) => {
 
     try {
       const credential = PhoneAuthProvider.credential(verificationId, fullCode);
+      const userCredential = await signInWithCredential(auth, credential);
+      const user = userCredential.user;
+
+      await deleteUser(user);
+
       Alert.alert('Número verificado', 'Tu número ha sido validado. Continúa con el registro.');
       navigation.navigate('Register', { phoneNumber });
+
     } catch (error) {
+      console.error("Error al verificar el código:", error);
       Alert.alert('Error', 'El código de verificación es inválido. Inténtalo de nuevo.');
     }
   };
 
   const handleInputChange = (text, index) => {
-    // Si se pega o se ingresan varios caracteres de una vez
     if (text.length > 1) {
-      // Extraer solo digitos, primeros 6 y separar
       const pastedCode = text.replace(/\D/g, '').slice(0, 6).split('');
       setCode(pastedCode);
+
       pastedCode.forEach((char, i) => {
         if (inputRefs.current[i]) {
           inputRefs.current[i].setNativeProps({ text: char });
         }
       });
+
       if (inputRefs.current[5]) {
         inputRefs.current[5].focus();
       }
     } else {
-      // Ingreso normal de un dígito
       const newCode = [...code];
       newCode[index] = text;
       setCode(newCode);
+
       if (text && index < 5) {
-        inputRefs.current[index + 1].focus();
+        inputRefs.current[index + 1]?.focus();
       }
     }
   };
 
   const handleKeyPress = (event, index) => {
-    if (event.nativeEvent.key === 'Backspace' && !code[index] && index > 0) {
-      inputRefs.current[index - 1].focus();
+    if (event.nativeEvent.key === 'Backspace') {
+      if (!code[index] && index > 0) {
+        inputRefs.current[index - 1]?.focus();
+      }
+      const newCode = [...code];
+      newCode[index] = '';
+      setCode(newCode);
     }
   };
 
@@ -69,21 +81,13 @@ const CodeVerificationScreen = ({ route, navigation }) => {
             value={value}
             onChangeText={(text) => handleInputChange(text, index)}
             onKeyPress={(event) => handleKeyPress(event, index)}
-            // Para el primer campo permite pegar hasta 6 caracteres los demas se mantienen en 1
-            maxLength={index === 0 ? 6 : 1}
+            maxLength={1}
             keyboardType="number-pad"
             autoCapitalize="none"
+            autoFocus={index === 0}
           />
         ))}
       </View>
-
-      {errorMessage !== '' && (
-        <Text style={styles.errorText}>{errorMessage}</Text>
-      )}
-
-      <Text style={styles.helperText}>
-        ¿No recibiste el código? Regresa y verifica que tu número es correcto.
-      </Text>
 
       <TouchableOpacity style={styles.verifyButton} onPress={verifyCode}>
         <Text style={styles.verifyButtonText}>Verificar</Text>
@@ -127,17 +131,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 24,
     marginHorizontal: 5,
-  },
-  errorText: {
-    color: 'red',
-    fontSize: 14,
-    marginBottom: 10,
-  },
-  helperText: {
-    fontSize: 14,
-    textAlign: 'center',
-    color: '#666',
-    marginBottom: 20,
   },
   verifyButton: {
     backgroundColor: '#33883F',

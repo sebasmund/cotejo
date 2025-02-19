@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, ScrollView, Platform } from 'react-native';
-import { auth, database } from '../firebaseConfig';
-import { ref, set, get } from 'firebase/database';
+import { auth, db } from '../firebaseConfig'; // Importa Firestore correctamente
+import { collection, doc, setDoc, query, where, getDocs } from 'firebase/firestore'; // Importaciones correctas
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 
@@ -21,31 +21,27 @@ const RegisterScreen = ({ route, navigation }) => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  // Verifica si el nombre de usuario ya existe en Firestore
   const checkUsernameExists = async (username) => {
     try {
-      const usersRef = ref(database, `users`);
-      const snapshot = await get(usersRef);
-  
-      if (snapshot.exists()) {
-        const users = snapshot.val();
-        for (const uid in users) {
-          if (users[uid].username === username) {
-            return true;
-          }
-        }
-      }
-      return false;
+      const usersRef = collection(db, 'users'); // Usa db en lugar de firestore
+      const q = query(usersRef, where('username', '==', username));
+      const querySnapshot = await getDocs(q);
+
+      return !querySnapshot.empty; // Retorna true si el nombre de usuario ya existe
     } catch (error) {
       console.log('Error al verificar nombre de usuario:', error);
       return false;
     }
   };
 
+  // Valida que la contraseña cumpla con los requisitos
   const isPasswordValid = (password) => {
     const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/;
     return passwordRegex.test(password);
   };
 
+  // Maneja el registro del usuario
   const handleRegister = async () => {
     console.log("Botón presionado");
 
@@ -53,17 +49,17 @@ const RegisterScreen = ({ route, navigation }) => {
       Alert.alert('Error', 'Todos los campos son obligatorios.');
       return;
     }
-    
+
     if (password !== confirmPassword) {
       Alert.alert('Error', 'Las contraseñas no coinciden.');
       return;
     }
-    
+
     if (!isPasswordValid(password)) {
       Alert.alert('Error', 'La contraseña debe tener al menos 8 caracteres, incluir una letra y un número.');
       return;
     }
-    
+
     const usernameExists = await checkUsernameExists(username);
     if (usernameExists) {
       Alert.alert('Error', 'Este nombre de usuario ya está en uso.');
@@ -75,24 +71,25 @@ const RegisterScreen = ({ route, navigation }) => {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const userId = userCredential.user.uid;
       console.log("Usuario creado con UID:", userId);
-      
-      const userRef = ref(database, `users/${userId}`);
-      await set(userRef, {
+
+      // Guardar los datos del usuario en Firestore
+      const userRef = doc(db, 'users', userId); // Usa db correctamente
+      await setDoc(userRef, {
         firstName,
         lastName,
         username,
         email,
         phoneNumber,
         createdAt: new Date().toISOString(),
-        followers: {},
-        following: {},
+        followers: [],
+        following: [],
         reliability: {
           matchesPlayed: 0,
           matchesAttended: 0,
           attendanceRate: 0,
         },
       });
-      console.log("Datos del usuario guardados en la base de datos");
+      console.log("Datos del usuario guardados en Firestore");
 
       Alert.alert('Registro exitoso', 'Tu cuenta ha sido creada.');
       navigation.navigate('Login');
@@ -246,4 +243,3 @@ const styles = StyleSheet.create({
 });
 
 export default RegisterScreen;
-
