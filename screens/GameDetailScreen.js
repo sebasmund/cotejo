@@ -1,29 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons'; // Para los iconos
+import { Ionicons } from '@expo/vector-icons';
 import { Button } from 'react-native-elements';
-import { database, auth } from '../firebaseConfig'; // Importa Firebase y auth
-import { ref, update, get, onValue } from 'firebase/database'; // Importa las funciones necesarias
+import { doc, getDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { db, auth } from '../firebaseConfig';
 import { useNavigation } from '@react-navigation/native';
+import moment from 'moment';
+import 'moment/locale/es';
+
+moment.locale('es');
 
 const GameDetailScreen = ({ route }) => {
-  const { game: initialGame } = route.params; // Datos iniciales del juego
-  const [game, setGame] = useState(initialGame); // Estado local para el juego
+  const { game: initialGame = {} } = route.params || {}; // Datos iniciales del juego
+  const [game, setGame] = useState(initialGame);
   const [isUserJoined, setIsUserJoined] = useState(false); // Estado para verificar si el usuario está inscrito
   const navigation = useNavigation();
   const userId = auth.currentUser?.uid; // Obtén el ID del usuario actual
 
   // Verificar si el usuario está inscrito
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !game.id) return;
 
-    const userJoinedRef = ref(database, `games/${game.id}/joinedUsers/${userId}`);
-    const unsubscribe = onValue(userJoinedRef, (snapshot) => {
-      setIsUserJoined(snapshot.exists()); // Actualiza el estado si el usuario está inscrito
-    });
+    const checkIfUserJoined = async () => {
+      const gameRef = doc(db, 'games', game.id);
+      const gameSnapshot = await getDoc(gameRef);
 
-    return () => unsubscribe(); // Desuscribirse al desmontar el componente
+      if (gameSnapshot.exists()) {
+        const gameData = gameSnapshot.data();
+        const joinedUsers = gameData.joinedUsers || [];
+        setIsUserJoined(joinedUsers.includes(userId)); // Verifica si el usuario está en la lista
+      }
+    };
+
+    checkIfUserJoined();
   }, [game.id, userId]);
 
   // Función para unirse al juego
@@ -33,26 +43,30 @@ const GameDetailScreen = ({ route }) => {
       return;
     }
 
-    const gameRef = ref(database, `games/${game.id}`);
-    const userJoinedRef = ref(database, `games/${game.id}/joinedUsers/${userId}`);
+    const gameRef = doc(db, 'games', game.id);
 
     try {
-      // Verificar si el usuario ya está inscrito (usando `get`)
-      const userJoinedSnapshot = await get(userJoinedRef);
-      if (userJoinedSnapshot.exists()) {
+      const gameSnapshot = await getDoc(gameRef);
+      if (!gameSnapshot.exists()) {
+        Alert.alert('Error', 'El partido no existe o ha sido eliminado.', [{ text: 'OK' }]);
+        return;
+      }
+
+      const gameData = gameSnapshot.data();
+      const joinedUsers = gameData.joinedUsers || [];
+
+      // Verificar si el usuario ya está inscrito
+      if (joinedUsers.includes(userId)) {
         Alert.alert('Error', 'Ya estás inscrito en este partido.', [{ text: 'OK' }]);
         return;
       }
 
-      // Verificar si hay cupos disponibles (usando `get`)
-      const gameSnapshot = await get(gameRef);
-      const gameData = gameSnapshot.val();
-
+      // Verificar si hay cupos disponibles
       if (gameData.slots > 0) {
         // Reducir el número de cupos y agregar el usuario a la lista de inscritos
-        await update(gameRef, {
+        await updateDoc(gameRef, {
           slots: gameData.slots - 1,
-          [`joinedUsers/${userId}`]: true,
+          joinedUsers: arrayUnion(userId), // Agrega el usuario a la lista
         });
 
         Alert.alert(
@@ -89,24 +103,28 @@ const GameDetailScreen = ({ route }) => {
       return;
     }
 
-    const gameRef = ref(database, `games/${game.id}`);
-    const userJoinedRef = ref(database, `games/${game.id}/joinedUsers/${userId}`);
+    const gameRef = doc(db, 'games', game.id);
 
     try {
-      // Verificar si el usuario está inscrito (usando `get`)
-      const userJoinedSnapshot = await get(userJoinedRef);
-      if (!userJoinedSnapshot.exists()) {
+      const gameSnapshot = await getDoc(gameRef);
+      if (!gameSnapshot.exists()) {
+        Alert.alert('Error', 'El partido no existe o ha sido eliminado.', [{ text: 'OK' }]);
+        return;
+      }
+
+      const gameData = gameSnapshot.data();
+      const joinedUsers = gameData.joinedUsers || [];
+
+      // Verificar si el usuario está inscrito
+      if (!joinedUsers.includes(userId)) {
         Alert.alert('Error', 'No estás inscrito en este partido.', [{ text: 'OK' }]);
         return;
       }
 
       // Aumentar el número de cupos y eliminar el usuario de la lista de inscritos
-      const gameSnapshot = await get(gameRef);
-      const gameData = gameSnapshot.val();
-
-      await update(gameRef, {
+      await updateDoc(gameRef, {
         slots: gameData.slots + 1,
-        [`joinedUsers/${userId}`]: null,
+        joinedUsers: arrayRemove(userId), // Elimina el usuario de la lista
       });
 
       Alert.alert(
@@ -129,10 +147,23 @@ const GameDetailScreen = ({ route }) => {
     }
   };
 
+  // Función para formatear la fecha sin el año
+const formatDate = (dateTime) => {
+  if (!dateTime) return 'Fecha no disponible';
+  return moment(dateTime.toDate()).format('MMMM D'); // Formato: "octubre 15"
+};
+
+// Función para formatear la hora en AM/PM
+const formatTime = (dateTime) => {
+  if (!dateTime) return 'Hora no disponible';
+  return moment(dateTime.toDate()).format('h:mm A'); // Formato: "10:30 AM"
+};
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.content}>
         <Text style={styles.title}>{game.title}</Text>
+        <Text style={styles.description}>{game.description || 'Sin descripción'}</Text>
 
         {/* Detalles del juego con iconos */}
         <View style={styles.detailRow}>
@@ -141,11 +172,11 @@ const GameDetailScreen = ({ route }) => {
         </View>
         <View style={styles.detailRow}>
           <Ionicons name="calendar" size={16} color="#555" />
-          <Text style={styles.detailText}>{game.date}</Text>
+          <Text style={styles.detailText}>{formatDate(game.dateTime)}</Text>
         </View>
         <View style={styles.detailRow}>
           <Ionicons name="time" size={16} color="#555" />
-          <Text style={styles.detailText}>{game.time}</Text>
+          <Text style={styles.detailText}>{formatTime(game.dateTime)}</Text>
         </View>
         <View style={styles.detailRow}>
           <Ionicons name="people" size={16} color="#555" />
@@ -154,14 +185,14 @@ const GameDetailScreen = ({ route }) => {
           </Text>
         </View>
         <View style={styles.detailRow}>
-          <Ionicons name="ticket" size={16} color="#555" />
+          <Ionicons name="grid" size={16} color="#555" />
           <Text style={styles.detailText}>
-            {game.slots || 'No disponible'}
+            Cupos disponibles: {game.slots || 'No disponible'}
           </Text>
         </View>
         <View style={styles.detailRow}>
           <Ionicons name="cash" size={16} color="#555" />
-          <Text style={styles.detailText}>${game.price}</Text>
+          <Text style={styles.detailText}>Precio: ${game.price}</Text>
         </View>
 
         {/* Botón "Unirse" o "Desinscribirse" */}
@@ -195,6 +226,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  description: {
+    fontSize: 16,
+    color: '#555',
     marginBottom: 20,
     textAlign: 'center',
   },

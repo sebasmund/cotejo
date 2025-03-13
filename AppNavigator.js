@@ -4,10 +4,8 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'; // Importa SafeAreaProvider y SafeAreaView
 import HomeScreen from './screens/HomeScreen';
 import UserScreen from './screens/UserScreen';
-import MessageScreen from './screens/MessageScreen';
 import MapScreen from './screens/MapScreen';
-import NotificationScreen from './screens/NotificationScreen';
-import SocialScreen from './screens/SocialScreen'; // Asegúrate de que la ruta sea correcta
+import SocialScreen from './screens/SocialScreen'; 
 
 const Tab = createBottomTabNavigator();
 
