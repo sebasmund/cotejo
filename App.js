@@ -10,6 +10,7 @@ import PasswordResetScreen from './screens/PasswordResetScreen';
 import GameDetailScreen from './screens/GameDetailScreen';
 import AddGame from './screens/AddGame';
 import AppNavigator from './AppNavigator'; 
+import SettingsScreen from './screens/SettingsScreen';
 
 const Stack = createStackNavigator();
 
@@ -42,6 +43,7 @@ export default function App() {
         )}
         <Stack.Screen name="AddGame" component={AddGame} />
         <Stack.Screen name="Details" component={GameDetailScreen} />
+        <Stack.Screen name="Settings" component={SettingsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
