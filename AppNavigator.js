@@ -37,8 +37,8 @@ export default function AppNavigator() {
             headerShown: false,
             tabBarStyle: {
               backgroundColor: '#fff',
-              height: 70,
-              paddingVertical: 10,
+              height: 72,
+              paddingVertical: 5,
               borderTopLeftRadius: 20,
               borderTopRightRadius: 20,
               position: 'absolute',

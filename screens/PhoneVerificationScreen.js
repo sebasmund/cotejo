@@ -1,29 +1,27 @@
-import React, { useState, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { auth, db } from '../firebaseConfig'; // Importación corregida
+import React, { useState } from 'react';
+import {
+  View, Text, TextInput, TouchableOpacity, StyleSheet, Alert,
+} from 'react-native';
+import { auth, db } from '../firebaseConfig';
 import { PhoneAuthProvider } from 'firebase/auth';
-import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
 import { collection, query, where, getDocs } from 'firebase/firestore';
+import { Keyboard, TouchableWithoutFeedback } from 'react-native';
 
 const PhoneVerificationScreen = ({ navigation, route }) => {
   const [phoneNumber, setPhoneNumber] = useState('');
-  const recaptchaVerifier = useRef(null);
 
-  // Convierte el número ingresado al formato internacional (+57...)
   const formatPhoneNumber = (inputNumber) => {
     return inputNumber.startsWith('+57') ? inputNumber : `+57${inputNumber}`;
   };
 
-  // Verifica si el número ya está registrado en Firestore
   const checkPhoneNumberExists = async (inputNumber) => {
-    const formattedNumber = formatPhoneNumber(inputNumber); // Asegurar formato
+    const formattedNumber = formatPhoneNumber(inputNumber);
     try {
-      const usersRef = collection(db, 'users'); // Usar db correctamente
+      const usersRef = collection(db, 'users');
       const q = query(usersRef, where('phoneNumber', '==', formattedNumber));
       const querySnapshot = await getDocs(q);
-
       console.log("Buscando el número:", formattedNumber, "resultado:", !querySnapshot.empty);
-      return !querySnapshot.empty; // Retorna true si el número existe
+      return !querySnapshot.empty;
     } catch (error) {
       console.log("Error al verificar el número de teléfono:", error);
       return false;
@@ -37,8 +35,6 @@ const PhoneVerificationScreen = ({ navigation, route }) => {
     }
 
     const fullPhoneNumber = formatPhoneNumber(phoneNumber);
-    
-    // Verificar si el número ya está registrado
     const exists = await checkPhoneNumberExists(fullPhoneNumber);
     if (exists) {
       Alert.alert('Número registrado', 'El número de teléfono ya está registrado.');
@@ -47,13 +43,8 @@ const PhoneVerificationScreen = ({ navigation, route }) => {
 
     try {
       const provider = new PhoneAuthProvider(auth);
-      const verificationId = await provider.verifyPhoneNumber(
-        fullPhoneNumber,
-        recaptchaVerifier.current
-      );
+      const verificationId = await provider.verifyPhoneNumber(fullPhoneNumber, null); // No recaptcha
       Alert.alert('Código enviado', 'Revisa tu teléfono.');
-      
-      // Navegar a la pantalla de código con el número formateado
       navigation.navigate('Code', { verificationId, phoneNumber: fullPhoneNumber });
     } catch (error) {
       Alert.alert('Error', error.message);
@@ -69,12 +60,8 @@ const PhoneVerificationScreen = ({ navigation, route }) => {
   };
 
   return (
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
     <View style={styles.container}>
-      <FirebaseRecaptchaVerifierModal
-        ref={recaptchaVerifier}
-        firebaseConfig={auth.app.options}
-        attemptInvisibleVerification={true}
-      />
       <Text style={styles.title}>Únete a Cotejo</Text>
       <Text style={styles.subtitle}>
         Estás a solo unos pasos de tu próximo partido de fútbol
@@ -106,6 +93,7 @@ const PhoneVerificationScreen = ({ navigation, route }) => {
         <Text style={styles.goBackText}>Regresar</Text>
       </TouchableOpacity>
     </View>
+    </TouchableWithoutFeedback>
   );
 };
 

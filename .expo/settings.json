@@ -5,6 +5,5 @@
   "minify": false,
   "urlRandomness": null,
   "https": false,
-  "scheme": "exp+cotejo",
-  "devClient": false
+  "devClient": true
 }

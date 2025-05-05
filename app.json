@@ -5,8 +5,10 @@
     "slug": "Cotejo",
     "plugins": [
       [
-        "expo-firebase-core"]
+        "expo-firebase-core"
       ],
+      "expo-maps"
+    ],
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -19,9 +21,11 @@
     "ios": {
       "supportsTablet": true,
       "config": {
-        "googleMapsApiKey": "AIzaSyA6nKBwkVETh5eVOaBhI2HdyVPu_zuo7Zc"},
-        "infoPlist": {
-    "NSLocationWhenInUseUsageDescription": "Esta app necesita acceder a tu ubicación para mostrar los partidos más cercanos."}
+        "googleMapsApiKey": "AIzaSyA6nKBwkVETh5eVOaBhI2HdyVPu_zuo7Zc"
+      },
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Esta app necesita acceder a tu ubicación para mostrar los partidos más cercanos."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -29,7 +33,8 @@
         "backgroundColor": "#ffffff",
         "package": "com.cotejo.cotejo",
         "config": {
-        "googleMapsApiKey": "AIzaSyA6nKBwkVETh5eVOaBhI2HdyVPu_zuo7Zc"}
+          "googleMapsApiKey": "AIzaSyA6nKBwkVETh5eVOaBhI2HdyVPu_zuo7Zc"
+        }
       },
       "package": "com.cotejo.cotejo"
     },
