@@ -1,111 +1,154 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native';
-import { db } from '../firebaseConfig'; // Importa la configuración de Firebase
-import { collection, addDoc, onSnapshot, query, orderBy, where, updateDoc, doc, arrayUnion, getDocs } from 'firebase/firestore';
-import Icon from 'react-native-vector-icons/FontAwesome'; // Para los íconos de like y comentar
-import * as Animatable from 'react-native-animatable'; // Para las animaciones
+import {
+  View,
+  Text,
+  TextInput,
+  FlatList,
+  StyleSheet,
+  TouchableOpacity,
+  RefreshControl,
+} from 'react-native';
+import { db, auth } from '../firebaseConfig';
+import {
+  collection,
+  addDoc,
+  getDoc,
+  getDocs,
+  updateDoc,
+  orderBy,
+  where,
+  query,
+  doc,
+  arrayUnion,
+} from 'firebase/firestore';
+import Icon from 'react-native-vector-icons/FontAwesome';
+import * as Animatable from 'react-native-animatable';
 
 export default function SocialScreen() {
   const [posts, setPosts] = useState([]);
   const [newPost, setNewPost] = useState('');
-  const [newComment, setNewComment] = useState({}); // Almacena los comentarios por publicación
-  const [replyingTo, setReplyingTo] = useState(null); // Almacena el comentario al que se está respondiendo
-  const [refreshing, setRefreshing] = useState(false); // Estado para controlar la animación de refresco
+  const [newComment, setNewComment] = useState({});
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Función para cargar las publicaciones y sus comentarios desde Firestore
   const loadPosts = async () => {
     const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
+
+    const userCache = {};
+
+    const getUserData = async (userId) => {
+      if (!userId) return { username: 'Anónimo' };
+      if (userCache[userId]) return userCache[userId];
+      const userSnap = await getDoc(doc(db, 'users', userId));
+      if (userSnap.exists()) {
+        const data = userSnap.data();
+        const username = data.username || `${data.firstName} ${data.lastName}`;
+        userCache[userId] = { username };
+        return { username };
+      }
+      return { username: 'Desconocido' };
+    };
+
     const postsData = await Promise.all(
       snapshot.docs.map(async (doc) => {
         const post = { id: doc.id, ...doc.data() };
-        // Cargar comentarios para cada publicación
-        const commentsQuery = query(collection(db, 'comments'), where('postId', '==', post.id), orderBy('createdAt', 'asc'));
+        post.user = await getUserData(post.userId);
+
+        const commentsQuery = query(
+          collection(db, 'comments'),
+          where('postId', '==', post.id),
+          orderBy('createdAt', 'asc')
+        );
         const commentsSnapshot = await getDocs(commentsQuery);
-        post.comments = commentsSnapshot.docs.map((commentDoc) => ({
-          id: commentDoc.id,
-          ...commentDoc.data(),
-        }));
+
+        post.comments = await Promise.all(
+          commentsSnapshot.docs.map(async (commentDoc) => {
+            const comment = { id: commentDoc.id, ...commentDoc.data() };
+            comment.user = await getUserData(comment.userId);
+            return comment;
+          })
+        );
+
         return post;
       })
     );
+
     setPosts(postsData);
   };
 
-  // Cargar las publicaciones al montar el componente
   useEffect(() => {
     loadPosts();
   }, []);
 
-  // Función para manejar el "pull-to-refresh"
   const onRefresh = async () => {
-    setRefreshing(true); // Activa la animación de refresco
-    await loadPosts(); // Recarga las publicaciones
-    setRefreshing(false); // Desactiva la animación de refresco
+    setRefreshing(true);
+    await loadPosts();
+    setRefreshing(false);
   };
 
-  // Función para publicar un nuevo mensaje
   const handlePost = async () => {
     if (newPost.trim()) {
       try {
         await addDoc(collection(db, 'posts'), {
           text: newPost,
           createdAt: new Date(),
-          likes: 0, // Inicializar likes en 0
+          likes: 0,
+          userId: auth.currentUser?.uid,
         });
         setNewPost('');
-        await loadPosts(); // Recargar las publicaciones después de publicar
+        await loadPosts();
       } catch (error) {
         console.error('Error al publicar:', error);
       }
     }
   };
 
-  // Función para dar like a una publicación
   const handleLike = async (postId, likeAnimationRef) => {
     try {
       const postRef = doc(db, 'posts', postId);
       await updateDoc(postRef, {
-        likes: arrayUnion(1), // Incrementar likes en 1
+        likes: arrayUnion(1),
       });
-      likeAnimationRef.current.bounce(); // Ejecuta la animación de rebote
-      await loadPosts(); // Recargar las publicaciones después de dar like
+      likeAnimationRef.current?.bounce();
+      await loadPosts();
     } catch (error) {
       console.error('Error al dar like:', error);
     }
   };
 
-  // Función para publicar un nuevo comentario
   const handleComment = async (postId, parentCommentId = null) => {
     if (newComment[postId]?.trim()) {
       try {
         await addDoc(collection(db, 'comments'), {
           text: newComment[postId],
           postId: postId,
-          parentCommentId: parentCommentId, // Si es una respuesta a otro comentario
+          parentCommentId: parentCommentId,
           createdAt: new Date(),
+          userId: auth.currentUser?.uid,
         });
-        setNewComment({ ...newComment, [postId]: '' }); // Limpia el campo de comentario
-        setReplyingTo(null); // Limpia el estado de respuesta
-        await loadPosts(); // Recargar las publicaciones después de comentar
+        setNewComment({ ...newComment, [postId]: '' });
+        setReplyingTo(null);
+        await loadPosts();
       } catch (error) {
         console.error('Error al comentar:', error);
       }
     }
   };
 
-  // Función para mostrar los comentarios en forma de árbol (respuestas anidadas)
-  const renderComments = (comments, parentId = null) => {
+  const renderComments = (comments, parentId = null, postId = null) => {
     return comments
       .filter((comment) => comment.parentCommentId === parentId)
       .map((comment) => (
         <View key={comment.id} style={styles.commentContainer}>
-          <Text style={styles.commentText}>{comment.text}</Text>
+          <Text style={styles.commentText}>
+            <Text style={{ fontWeight: 'bold' }}>@{comment.user?.username}: </Text>
+            {comment.text}
+          </Text>
           <TouchableOpacity onPress={() => setReplyingTo(comment.id)}>
             <Text style={styles.replyText}>Responder</Text>
           </TouchableOpacity>
-          {/* Mostrar respuestas anidadas */}
-          {renderComments(comments, comment.id)}
+          {renderComments(comments, comment.id, postId)}
           {replyingTo === comment.id && (
             <View style={styles.replyInputContainer}>
               <TextInput
@@ -141,13 +184,14 @@ export default function SocialScreen() {
       <FlatList
         data={posts}
         keyExtractor={(item) => item.id}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         renderItem={({ item }) => {
-          const likeAnimationRef = React.createRef(); // Referencia para la animación
+          const likeAnimationRef = React.createRef();
           return (
             <View style={styles.post}>
+              <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>
+                @{item.user?.username}
+              </Text>
               <Text>{item.text}</Text>
               <View style={styles.actionsContainer}>
                 <TouchableOpacity
@@ -155,11 +199,14 @@ export default function SocialScreen() {
                   onPress={() => handleLike(item.id, likeAnimationRef)}
                 >
                   <Animatable.View ref={likeAnimationRef}>
-                    <Icon name="thumbs-up" size={16} color="#33883F" />
+                    <Icon name="heart" size={16} color="#FF0000" />
                   </Animatable.View>
                   <Text style={styles.smallButtonText}>{item.likes || 0}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.smallButton} onPress={() => setReplyingTo(item.id)}>
+                <TouchableOpacity
+                  style={styles.smallButton}
+                  onPress={() => setReplyingTo(item.id)}
+                >
                   <Icon name="comment" size={16} color="#33883F" />
                 </TouchableOpacity>
               </View>
@@ -179,7 +226,7 @@ export default function SocialScreen() {
                   </TouchableOpacity>
                 </View>
               )}
-              {item.comments && renderComments(item.comments)}
+              {item.comments && renderComments(item.comments, null, item.id)}
             </View>
           );
         }}
@@ -189,34 +236,19 @@ export default function SocialScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-    backgroundColor: '#fff',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#33883F',
-    marginBottom: 16,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
+  container: { flex: 1, padding: 16, backgroundColor: '#fff' },
+  title: { fontSize: 24, fontWeight: 'bold', color: '#33883F', marginBottom: 16 },
+  input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 8, marginBottom: 16 },
+  button: {
+    backgroundColor: '#33883F',
+    padding: 12,
     borderRadius: 8,
-    padding: 8,
+    alignItems: 'center',
     marginBottom: 16,
   },
-  post: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ccc',
-  },
-  actionsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 8,
-  },
+  buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  post: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#ccc' },
+  actionsContainer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
   smallButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -224,14 +256,8 @@ const styles = StyleSheet.create({
     padding: 6,
     borderRadius: 8,
   },
-  smallButtonText: {
-    marginLeft: 4,
-    color: '#33883F',
-    fontSize: 14,
-  },
-  commentInputContainer: {
-    marginTop: 8,
-  },
+  smallButtonText: { marginLeft: 4, color: '#33883F', fontSize: 14 },
+  commentInputContainer: { marginTop: 8 },
   commentInput: {
     borderWidth: 1,
     borderColor: '#ccc',
@@ -246,34 +272,14 @@ const styles = StyleSheet.create({
     borderLeftWidth: 2,
     borderLeftColor: '#ccc',
   },
-  commentText: {
-    fontSize: 14,
-  },
-  replyText: {
-    color: '#33883F',
-    fontSize: 12,
-    marginTop: 4,
-  },
-  replyInputContainer: {
-    marginTop: 8,
-  },
+  commentText: { fontSize: 14 },
+  replyText: { color: '#33883F', fontSize: 12, marginTop: 4 },
+  replyInputContainer: { marginTop: 8 },
   replyInput: {
     borderWidth: 1,
     borderColor: '#ccc',
     borderRadius: 8,
     padding: 8,
     marginBottom: 8,
-  },
-  button: {
-    backgroundColor: '#33883F',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
   },
 });
