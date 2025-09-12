@@ -1,9 +1,16 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, ScrollView, Platform } from 'react-native';
-import { auth, db } from '../firebaseConfig'; // Importa Firestore correctamente
-import { collection, doc, setDoc, query, where, getDocs } from 'firebase/firestore'; // Importaciones correctas
+import {
+  View, Text, TextInput, TouchableOpacity, StyleSheet, Alert,
+  KeyboardAvoidingView, ScrollView, Platform
+} from 'react-native';
+
+import { auth, db } from '../firebaseConfig';
+import {
+  collection, doc, setDoc, query, where, getDocs, serverTimestamp
+} from 'firebase/firestore';
+
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { EmailAuthProvider, linkWithCredential } from 'firebase/auth';
 
 const RegisterScreen = ({ route, navigation }) => {
   const phoneNumber = route?.params?.phoneNumber || null;
@@ -15,91 +22,98 @@ const RegisterScreen = ({ route, navigation }) => {
   }
 
   const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [lastName, setLastName]   = useState('');
+  const [username, setUsername]   = useState('');
+  const [email, setEmail]         = useState('');
+  const [password, setPassword]   = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  // Verifica si el nombre de usuario ya existe en Firestore
-  const checkUsernameExists = async (username) => {
+  // Verifica si username ya existe (case-insensitive usando usernameLower)
+  const checkUsernameExists = async (value) => {
     try {
-      const usersRef = collection(db, 'users'); // Usa db en lugar de firestore
-      const q = query(usersRef, where('username', '==', username));
-      const querySnapshot = await getDocs(q);
-
-      return !querySnapshot.empty; // Retorna true si el nombre de usuario ya existe
-    } catch (error) {
-      console.log('Error al verificar nombre de usuario:', error);
-      return false;
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('usernameLower', '==', value.trim().toLowerCase()));
+      const snap = await getDocs(q);
+      return !snap.empty;
+    } catch (err) {
+      console.log('Error al verificar nombre de usuario:', err);
+      // En caso de error de red/permiso, mejor bloquear el registro para evitar duplicados
+      return true;
     }
   };
 
-  // Valida que la contraseña cumpla con los requisitos
-  const isPasswordValid = (password) => {
-    const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/;
-    return passwordRegex.test(password);
-  };
+  const isPasswordValid = (value) => /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/.test(value);
 
-  // Maneja el registro del usuario
   const handleRegister = async () => {
-    console.log("Botón presionado");
-
-    if (!firstName || !lastName || !username || !email || !password || !confirmPassword) {
-      Alert.alert('Error', 'Todos los campos son obligatorios.');
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      Alert.alert('Error', 'Las contraseñas no coinciden.');
-      return;
-    }
-
-    if (!isPasswordValid(password)) {
-      Alert.alert('Error', 'La contraseña debe tener al menos 8 caracteres, incluir una letra y un número.');
-      return;
-    }
-
-    const usernameExists = await checkUsernameExists(username);
-    if (usernameExists) {
-      Alert.alert('Error', 'Este nombre de usuario ya está en uso.');
-      return;
-    }
+    if (submitting) return;
+    setSubmitting(true);
 
     try {
-      console.log("Intentando crear usuario en Firebase Authentication con email:", email);
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const userId = userCredential.user.uid;
-      console.log("Usuario creado con UID:", userId);
+      if (!firstName || !lastName || !username || !email || !password || !confirmPassword) {
+        Alert.alert('Error', 'Todos los campos son obligatorios.');
+        return;
+      }
 
-      // Guardar los datos del usuario en Firestore
-      const userRef = doc(db, 'users', userId); // Usa db correctamente
-      await setDoc(userRef, {
-        firstName,
-        lastName,
-        username,
-        email,
-        phoneNumber,
-        createdAt: new Date().toISOString(),
+      if (password !== confirmPassword) {
+        Alert.alert('Error', 'Las contraseñas no coinciden.');
+        return;
+      }
+
+      if (!isPasswordValid(password)) {
+        Alert.alert('Error', 'La contraseña debe tener al menos 8 caracteres, incluir una letra y un número.');
+        return;
+      }
+
+      // Debes venir logueado por teléfono desde CodeVerificationScreen
+      if (!auth.currentUser) {
+        Alert.alert('Error', 'No hay sesión activa para vincular. Verifica tu teléfono primero.');
+        return;
+      }
+
+      const usernameTaken = await checkUsernameExists(username);
+      if (usernameTaken) {
+        Alert.alert('Error', 'Este nombre de usuario ya está en uso.');
+        return;
+      }
+
+      // Vincular email+password a la MISMA cuenta (mismo UID)
+      const emailNorm = email.trim().toLowerCase();
+      const cred = EmailAuthProvider.credential(emailNorm, password);
+      await linkWithCredential(auth.currentUser, cred);
+
+      const uid = auth.currentUser.uid;
+
+      // Crear/actualizar perfil en Firestore
+      await setDoc(doc(db, 'users', uid), {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        username: username.trim(),
+        usernameLower: username.trim().toLowerCase(),
+        email: emailNorm,
+        phoneNumber: phoneNumber,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
         followers: [],
         following: [],
-        reliability: {
-          matchesPlayed: 0,
-          matchesAttended: 0,
-          attendanceRate: 0,
-        },
-      });
-      console.log("Datos del usuario guardados en Firestore");
+        reliability: { matchesPlayed: 0, matchesAttended: 0 },
+      }, { merge: true });
 
-      Alert.alert('Registro exitoso', 'Tu cuenta ha sido creada.');
-      navigation.navigate('Login');
+      Alert.alert('¡Listo!', 'Tu cuenta quedó vinculada y el perfil creado.');
+      // Ya estás autenticado: entra a la app
+      navigation.replace('Home');
+
     } catch (error) {
-      console.log("Error en el registro:", error);
-      if (error.code === 'auth/email-already-in-use') {
-        Alert.alert('Error', 'El correo electrónico ya está registrado.');
+      console.log('Error al vincular/registrar:', error);
+      if (error?.code === 'auth/email-already-in-use') {
+        Alert.alert('Error', 'Ese correo ya está registrado en otra cuenta. Inicia sesión con ese correo o usa otro.');
+      } else if (error?.code === 'auth/credential-already-in-use') {
+        Alert.alert('Error', 'Las credenciales ya están vinculadas a otra cuenta.');
       } else {
-        Alert.alert('Error', error.message);
+        Alert.alert('Error', error?.message || 'No fue posible completar el registro.');
       }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -137,6 +151,7 @@ const RegisterScreen = ({ route, navigation }) => {
             placeholder="Nombre de usuario"
             value={username}
             onChangeText={setUsername}
+            autoCapitalize="none"
           />
         </View>
 
@@ -173,8 +188,8 @@ const RegisterScreen = ({ route, navigation }) => {
           />
         </View>
 
-        <TouchableOpacity style={styles.button} onPress={handleRegister}>
-          <Text style={styles.buttonText}>Registrarse</Text>
+        <TouchableOpacity style={[styles.button, submitting && { opacity: 0.7 }]} onPress={handleRegister} disabled={submitting}>
+          <Text style={styles.buttonText}>{submitting ? 'Creando...' : 'Registrarse'}</Text>
         </TouchableOpacity>
 
         <Text style={styles.disclaimer}>
@@ -187,59 +202,23 @@ const RegisterScreen = ({ route, navigation }) => {
 
 const styles = StyleSheet.create({
   container: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    paddingHorizontal: 20,
-    paddingVertical: 30,
+    flexGrow: 1, justifyContent: 'center', alignItems: 'center',
+    backgroundColor: '#fff', paddingHorizontal: 20, paddingVertical: 30,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#000',
-    marginBottom: 20,
-  },
+  title: { fontSize: 24, fontWeight: 'bold', color: '#000', marginBottom: 20 },
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    height: 50,
-    borderColor: '#33883F',
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    marginBottom: 15,
-    backgroundColor: '#fff',
+    flexDirection: 'row', alignItems: 'center', width: '100%', height: 50,
+    borderColor: '#33883F', borderWidth: 1, borderRadius: 10,
+    paddingHorizontal: 10, marginBottom: 15, backgroundColor: '#fff',
   },
-  icon: {
-    marginRight: 10,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: '#000',
-  },
+  icon: { marginRight: 10 },
+  input: { flex: 1, fontSize: 16, color: '#000' },
   button: {
-    backgroundColor: '#33883F',
-    width: '100%',
-    height: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 10,
-    marginBottom: 20,
+    backgroundColor: '#33883F', width: '100%', height: 50,
+    justifyContent: 'center', alignItems: 'center', borderRadius: 10, marginBottom: 20,
   },
-  buttonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  disclaimer: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
-    marginTop: 10,
-  },
+  buttonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  disclaimer: { fontSize: 12, color: '#666', textAlign: 'center', marginTop: 10 },
 });
 
 export default RegisterScreen;
