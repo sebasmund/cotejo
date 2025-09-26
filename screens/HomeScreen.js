@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   SafeAreaView,
   View,
@@ -19,17 +19,36 @@ import 'moment/locale/es';
 
 moment.locale('es');
 
+const BATCH_DAYS = 14; // cuántos días agrega por “carga” al deslizar
+
 export default function HomeScreen() {
   const [selectedDate, setSelectedDate] = useState(moment().format('YYYY-MM-DD'));
   const [games, setGames] = useState([]);
   const [filteredGames, setFilteredGames] = useState([]);
   const [searchText, setSearchText] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+
+  const [days, setDays] = useState(() => generateDays(0, BATCH_DAYS));
+  const calendarRef = useRef(null);
   const navigation = useNavigation();
+
+  // --- Genera días a partir de hoy + offset ---
+  function generateDays(offset = 0, count = BATCH_DAYS) {
+    const arr = [];
+    for (let i = 0; i < count; i++) {
+      const d = moment().add(offset + i, 'days');
+      arr.push({
+        label: d.format('ddd').toUpperCase().replace('.', ''),
+        number: d.format('D'),
+        value: d.format('YYYY-MM-DD'),
+      });
+    }
+    return arr;
+  }
 
   // Cargar juegos desde Firestore
   const fetchGames = async (date = selectedDate) => {
-    setRefreshing(true); // Activa el estado de refreshing
+    setRefreshing(true);
     try {
       const querySnapshot = await getDocs(collection(db, 'games'));
       const gamesArray = querySnapshot.docs.map((doc) => ({
@@ -38,21 +57,20 @@ export default function HomeScreen() {
         dateTime: doc.data().dateTime || null,
       }));
 
-      setGames(gamesArray); // Actualiza la lista completa de juegos
-      filterGamesByDate(gamesArray, date); // Filtra los juegos por fecha
+      setGames(gamesArray);
+      filterGamesByDate(gamesArray, date);
     } catch (error) {
       console.error('Error fetching games from Firestore:', error);
     } finally {
-      setRefreshing(false); // Desactiva el estado de refreshing
+      setRefreshing(false);
     }
   };
 
-  // Cargar los juegos al montar el componente
   useEffect(() => {
     fetchGames();
   }, []);
 
-  // Filtrar juegos por fecha
+  // Filtrar por fecha seleccionada
   const filterGamesByDate = (gamesList, date) => {
     setSelectedDate(date);
     const filtered = gamesList.filter((game) => {
@@ -60,56 +78,57 @@ export default function HomeScreen() {
       const gameDate = moment(game.dateTime.toDate()).format('YYYY-MM-DD');
       return gameDate === date;
     });
-    setFilteredGames(filtered); // Actualiza los juegos filtrados
+    setFilteredGames(filtered);
   };
 
-  // Manejar el cambio de fecha
+  // Cambiar fecha seleccionada
   const handleDatePress = (date) => {
     fetchGames(date);
   };
 
-  // Manejar la búsqueda de juegos
+  // Búsqueda
   const handleSearch = (text) => {
     setSearchText(text);
     if (!text.trim()) {
-      setFilteredGames(games); // Si no hay texto de búsqueda, muestra todos los juegos
+      setFilteredGames(games);
       return;
     }
     const filtered = games.filter(
       (game) =>
-        game.title.toLowerCase().includes(text.toLowerCase()) ||
-        game.address.toLowerCase().includes(text.toLowerCase())
+        (game.title || '').toLowerCase().includes(text.toLowerCase()) ||
+        (game.address || '').toLowerCase().includes(text.toLowerCase())
     );
-    setFilteredGames(filtered); // Actualiza los juegos filtrados por búsqueda
+    setFilteredGames(filtered);
   };
 
-  // Renderizar el calendario
-  const renderCalendar = () => {
-    const days = [];
-    for (let i = 0; i < 6; i++) {
-      const day = moment().add(i, 'days');
-      days.push({
-        label: day.format('ddd').toUpperCase().replace('.', ''),
-        number: day.format('D'),
-        value: day.format('YYYY-MM-DD'),
-      });
-    }
-
-    return days.map((day, index) => (
+  // Render de cada día del calendario
+  const renderDay = ({ item }) => {
+    const isSelected = selectedDate === item.value;
+    return (
       <TouchableOpacity
-        key={index}
-        onPress={() => handleDatePress(day.value)}
-        style={[styles.dateButton, selectedDate === day.value && styles.selectedDateButton]}
+        onPress={() => handleDatePress(item.value)}
+        style={[styles.dateButton, isSelected && styles.selectedDateButton]}
       >
-        <Text style={[styles.dateLabel, selectedDate === day.value && styles.selectedDateLabel]}>
-          {day.label}
-        </Text>
-        <Text style={[styles.dateNumber, selectedDate === day.value && styles.selectedDateNumber]}>
-          {day.number}
-        </Text>
+        <Text style={[styles.dateLabel, isSelected && styles.selectedDateLabel]}>{item.label}</Text>
+        <Text style={[styles.dateNumber, isSelected && styles.selectedDateNumber]}>{item.number}</Text>
       </TouchableOpacity>
-    ));
+    );
   };
+
+  // Cargar más días al llegar al final (deslizar a la derecha)
+  const loadMoreDays = useCallback(() => {
+    setDays((prev) => {
+      const nextOffset = prev.length; // continúa desde el último día mostrado
+      return [...prev, ...generateDays(nextOffset, BATCH_DAYS)];
+    });
+  }, []);
+
+  // Optimiza el scroll del calendario horizontal
+  const getItemLayout = (_, index) => ({
+    length: 65, // ancho aprox. del botón + margen (ajusta si cambias estilos)
+    offset: 65 * index,
+    index,
+  });
 
   return (
     <SafeAreaView style={styles.container}>
@@ -129,8 +148,22 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Calendario */}
-      <View style={styles.calendarContainer}>{renderCalendar()}</View>
+      {/* Calendario deslizante horizontal */}
+      <View style={styles.calendarContainer}>
+        <FlatList
+          ref={calendarRef}
+          data={days}
+          horizontal
+          keyExtractor={(item) => item.value}
+          renderItem={renderDay}
+          showsHorizontalScrollIndicator={false}
+          onEndReached={loadMoreDays}
+          onEndReachedThreshold={0.4}
+          getItemLayout={getItemLayout}
+          initialNumToRender={BATCH_DAYS}
+          contentContainerStyle={styles.calendarContent}
+        />
+      </View>
 
       {/* Lista de juegos con pull-to-refresh */}
       <FlatList
@@ -138,14 +171,16 @@ export default function HomeScreen() {
         keyExtractor={(item) => item.id}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing} // Estado de refreshing
-            onRefresh={() => fetchGames()} // Función que se ejecuta al refrescar
-            colors={['#33883F']} // Color del spinner (opcional)
-            tintColor="#33883F" // Color del spinner (opcional)
+            refreshing={refreshing}
+            onRefresh={() => fetchGames()}
+            colors={['#33883F']}
+            tintColor="#33883F"
           />
         }
         renderItem={({ item }) => {
-          const gameTime = item.dateTime ? moment(item.dateTime.toDate()).format('hh:mm A') : 'Hora no disponible';
+          const gameTime = item.dateTime
+            ? moment(item.dateTime.toDate()).format('hh:mm A')
+            : 'Hora no disponible';
           return (
             <View style={styles.card}>
               <View style={styles.cardContent}>
@@ -160,7 +195,8 @@ export default function HomeScreen() {
                   <Ionicons name="people-outline" size={18} color="#33883F" /> {item.players || 'Sin jugadores'}
                 </Text>
                 <Text style={styles.cardText}>
-                  <Ionicons name="grid-outline" size={18} color="#33883F" /> Espacios disponibles: {item.slots || 'No disponible'}
+                  <Ionicons name="grid-outline" size={18} color="#33883F" /> Espacios disponibles:{' '}
+                  {item.slots || 'No disponible'}
                 </Text>
                 <View style={styles.footerContainer}>
                   <View style={styles.priceInfo}>
@@ -177,17 +213,15 @@ export default function HomeScreen() {
             </View>
           );
         }}
-        contentContainerStyle={styles.flatListContent} // Estilo para el contenido de la FlatList
+        contentContainerStyle={styles.flatListContent}
       />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
+  container: { flex: 1, backgroundColor: '#fff' },
+
   header: {
     width: '100%',
     flexDirection: 'row',
@@ -205,26 +239,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginRight: 10,
   },
-  searchIcon: {
-    marginHorizontal: 10,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 8,
-    fontSize: 16,
-    color: '#000',
-  },
-  iconButton: {
-    padding: 8,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 10,
-  },
+  searchIcon: { marginHorizontal: 10 },
+  searchInput: { flex: 1, paddingVertical: 8, fontSize: 16, color: '#000' },
+  iconButton: { padding: 8, backgroundColor: '#f5f5f5', borderRadius: 10 },
+
+  // Calendario
   calendarContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginVertical: 10,
     width: '100%',
+    paddingVertical: 10,
   },
+  calendarContent: { paddingHorizontal: 8 },
   dateButton: {
     width: 55,
     height: 60,
@@ -234,24 +258,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
     marginHorizontal: 5,
   },
-  selectedDateButton: {
-    backgroundColor: '#33883F',
-  },
-  dateLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  selectedDateLabel: {
-    color: '#fff',
-  },
-  dateNumber: {
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  selectedDateNumber: {
-    color: '#fff',
-  },
+  selectedDateButton: { backgroundColor: '#33883F' },
+  dateLabel: { fontSize: 12, fontWeight: 'bold', textAlign: 'center' },
+  selectedDateLabel: { color: '#fff' },
+  dateNumber: { fontSize: 16, textAlign: 'center' },
+  selectedDateNumber: { color: '#fff' },
+
+  // Cards
   card: {
     backgroundColor: '#fff',
     borderRadius: 10,
@@ -264,41 +277,22 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  cardContent: {
-    flex: 1,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  cardText: {
-    fontSize: 14,
-    color: '#555',
-    marginBottom: 4,
-  },
+  cardContent: { flex: 1 },
+  cardTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 8 },
+  cardText: { fontSize: 14, color: '#555', marginBottom: 4 },
   footerContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 12,
   },
-  priceInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  cardPrice: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#000',
-  },
+  priceInfo: { flexDirection: 'row', alignItems: 'center' },
+  cardPrice: { fontSize: 16, fontWeight: 'bold', color: '#000' },
   detailsButton: {
     backgroundColor: '#33883F',
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
-  flatListContent: {
-    paddingBottom: 16, // Espacio adicional al final de la lista
-  },
+  flatListContent: { paddingBottom: 16 },
 });
