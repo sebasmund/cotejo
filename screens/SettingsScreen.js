@@ -26,8 +26,15 @@ export default function SettingsScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Configuración</Text>
+      {/* Header con flecha de retroceso */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Icon name="arrow-back" size={24} color="#000" />
+        </TouchableOpacity>
+        <Text style={styles.title}>Configuración</Text>
+      </View>
 
+      {/* Opciones */}
       <Option icon="mail-outline" label="Actualizar correo" onPress={() => navigation.navigate('UpdateEmail')} />
       <Option icon="lock-closed-outline" label="Cambiar contraseña" onPress={() => navigation.navigate('UpdatePassword')} />
       <Option icon="information-circle-outline" label="Acerca de" onPress={() => navigation.navigate('About')} />
@@ -51,11 +58,18 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     backgroundColor: '#fff',
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  backButton: {
+    marginRight: 10,
+    padding: 6,
+  },
   title: {
     fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 30,
-    textAlign: 'center',
     color: '#222',
   },
   option: {
@@ -73,3 +87,4 @@ const styles = StyleSheet.create({
     marginRight: 14,
   },
 });
+  
